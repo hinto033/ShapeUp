@@ -6,10 +6,18 @@
 #Load Data
 #Different Possible Paths based on Computer
 
+
+for (sexLoop in 1:2){
+
 setwd("W:\\3D Optical_Data\\Fit 3D\\Michelle Shape Up Optical Models\\0515 Updated Shape Models\\")
+  
+if (sexLoop==1){  
 allData <- read.csv('combined_measurements_Male.csv', header = TRUE)
-
-
+sexType <- "Male"
+}else if (sexLoop ==2){
+allData <- read.csv('combined_measurements_Female.csv', header = TRUE)
+sexType <- "Female"
+}
 #####
 #Description of Data
 print(colnames(allData))
@@ -21,21 +29,21 @@ keep <- c("SubjectID", "Ethnicity", "BMI","WaistCircum1", "HipCircum","UpperArmC
 relData <- allData[keep]
 
 #####
-#Regression w.r.t. Only Shape Markers
-
-# setwd("D:\\LabData\\ShapeUp\\Shapeup-PCAToBloodMarkers\\")
-setwd("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Code\\")
-# fileConn<-file("3DO_regressionWRTShapePCsOnly.txt")
-
-
+#Set Save Directory
+setwd("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\")
+savePathBase <- ("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\")
 #####
 
+#Perform analysis with Glucose
+bMarkerVec <- c("GLU", "CHOL", "TRIG", "HDL", "LDL","INS","AIC")
 
+for (bMarkLoop in 1:7){
+bMarker <- bMarkerVec[bMarkLoop]
 
-#####
-
-# "GLU", "CHOL", "TRIG", "HDL", "LDL","INS","AIC",
-keep <- c('INS','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7','PC8', 'PC9' )
+savePath <- paste(savePathBase,bMarker, "\\", sep="")
+setwd(savePath)
+keep <- c(bMarker,'PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7','PC8', 'PC9' )
+pcsKeep <- c('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7','PC8', 'PC9' )
 predData <- na.omit(relData[keep])
 #Prep for K-Folds
 #Randomly shuffle the data (CC)
@@ -43,202 +51,76 @@ predData<-predData[sample(nrow(predData)),]
 #Create 10 equally size folds (CC)
 predDataFolds <- cut(seq(1,nrow(predData)),breaks=10,labels=FALSE)
 
-regResults <- data.frame(matrix(ncol = 2, nrow = 10))
-colnames(regResults) <- c('r','r2')
-# j<-1
+regResults <- data.frame(matrix(ncol = 6, nrow = 11))
+colnames(regResults) <- c('train_r','train_r2', 'train_rmse', 'test_r', 'test_r2', 'test_rmse')
 
+allPredicted <- NULL
+allActual <- NULL
+txtRegFile <-paste("Male_regression",bMarker,".txt", sep="")
+fileConn<-file(txtRegFile)
 for(j in 1:10){
-  testSetIndexes <- which(relDataFolds==j,arr.ind=TRUE)
+  testSetIndexes <- which(predDataFolds==j,arr.ind=TRUE)
   testSet <- rbind(predData[testSetIndexes, ])
   trainSet <- rbind(predData[-testSetIndexes, ])
-
-  model <- lm(trainSet$INS~., data=trainSet)
-  modelStep <- step(model, direction='forward')
+  
+  
+  model <- lm(trainSet[,1]~., data=trainSet[pcsKeep])
   modelStep <- step(model)
-  summary(modelStep)
+  trainRegSumm <- summary(modelStep)
+  out <- capture.output(summary(modelStep))
+  cat(out,file=txtRegFile,sep="\n",append=TRUE)
+  
+  
+  png(filename=paste(savePath,bMarker,"TrainPlot",j,".png", sep=""))
+  plot.new()
+  plot(trainSet[,1], modelStep$fitted.values,lty=9,lwd=9,cex = 1,cex.axis=2,cex.lab = 2,col="red",
+       xlim=c(min(predData[,1]),max(predData[,1])), ylim=c(min(predData[,1]),max(predData[,1])),
+       xlab = paste("Actual Value of ", bMarker, sep=""), ylab = paste("Predicted Value of ", bMarker, sep=""))
+  title(main = paste("Regression of ",sexType ," Train Set Version ", j, sep= ""))
+  dev.off()
+  
+  rValTrain <- cor(modelStep$fitted.values,trainSet[,1])
+  regResults[j,1] <- rValTrain
+  regResults[j,2] <- rValTrain*rValTrain
+  regResults[j,3] <- sqrt(mean((modelStep$fitted.values - trainSet[,1])^2, na.rm = TRUE) )
+  
   
   fitted.results <- predict(modelStep,newdata=testSet,type='response')
+  allPredicted <- c(allPredicted, fitted.results)
+  allActual <- c(allActual, testSet[,1])
   
-  # Add Plots of actual vs predicted? ################################################
-  # Save the Actual Regression Equations ###########################################
-  # Save the training R2 and the test R2 #############################################
+  png(filename=paste(savePath,bMarker,sexType,"TestPlot",j,".png", sep=""))
+  plot.new()
+  plot(testSet[,1], fitted.results,lty=9,lwd=9,cex = 1,cex.axis=2,cex.lab = 2,col="red",
+       xlim=c(min(predData[,1]),max(predData[,1])), ylim=c(min(predData[,1]),max(predData[,1])),
+       xlab = paste("Actual Value of ", bMarker, sep=""), ylab = paste("Predicted Value of ", bMarker, sep=""))
+  title(main = paste("Regression of ",sexType ," Test Set Version ", j, sep= ""))
+  dev.off()
   
-  
-  rVal <- cor(fitted.results,testSet$INS)
-  regResults[j,1] <- rVal
-  regResults[j,2] <- rVal*rVal
+  rVal <- cor(fitted.results,testSet[,1])
+  regResults[j,4] <- rVal
+  regResults[j,5] <- rVal*rVal
+  regResults[j,6] <- sqrt(mean((fitted.results - testSet[,1])^2, na.rm = TRUE) )
 } 
 
+png(filename=paste(savePath,"Combined",bMarker,sexType,"TestPlot.png", sep=""))
+plot.new()
+plot(allActual, allPredicted,lty=9,lwd=9,cex = 1,cex.axis=2,cex.lab = 2,col="red",
+     xlim=c(min(predData[,1]),max(predData[,1])), ylim=c(min(predData[,1]),max(predData[,1])),
+     xlab = paste("Actual Value of ", bMarker, sep=""), ylab = paste("Predicted Value of ", bMarker, sep=""))
+title(main = paste("Combined Predictions from All KFolds for ",sexType," " , bMarker, sep=""))
+dev.off()
 
+rVal <- cor(allActual,allPredicted)
+regResults[11,4] <- rVal
+regResults[11,5] <- rVal*rVal
+regResults[11,6] <- sqrt(mean((fitted.results - testSet[,1])^2, na.rm = TRUE) )
 
-
-
-
-
-#####
-
-
-
-
-
-
-
-
-
-keep <- c('HDL','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$HDL~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-keep <- c('LDL','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$LDL~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-keep <- c('TRIG','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$TRIG~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-keep <- c('CHOL','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$CHOL~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-keep <- c('GLU','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$GLU~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-keep <- c('INS','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$INS~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-keep <- c('URIC','PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$URIC~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionWRTShapePCsOnly.txt",sep="\n",append=TRUE)
-
-close(fileConn)
-#####
-
-
-#Regression w.r.t. Shape After Controls
-
-# setwd("X:\\bhinton\\Shapeup-PCAToBloodMarkers\\")
-setwd("D:\\LabData\\ShapeUp\\Shapeup-PCAToBloodMarkers\\")
-fileConn<-file("3DO_regressionShapeAfterDemogControl.txt")
-
-keep <- c('HBAIC', 'age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6','PC7' )
-predData <- na.omit(relData[keep])
-model <- lm(predData$HBAIC~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('HDL','age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$HDL~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('LDL','age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$LDL~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('TRIG','age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$TRIG~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('CHOL','age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$CHOL~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('GLU','age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$GLU~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('INS', 'age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$INS~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
-keep <- c('URIC', 'age' ,'Gender', 'Ethnicity', 'BMI', 'HeightCMAvg', 'WeightKGAvg',
-          'Op_PC1', 'Op_PC2', 'Op_PC3', 'Op_PC4', 'Op_PC5', 'Op_PC6','Op_PC7')
-predData <- na.omit(relData[keep])
-model <- lm(predData$URIC~., data=predData)
-modelStep <- step(model)
-rmseModel <- sqrt(mean((modelStep$fitted.values - modelStep$y)^2, na.rm = TRUE) )
-r2Model <- summary(modelStep)$r.squared
-out <- capture.output(summary(modelStep))
-cat(out,file="3DO_regressionShapeAfterDemogControl.txt",sep="\n",append=TRUE)
-
+write.csv(regResults, file = paste(savePath,sexType,"_",bMarker,"_kFoldRegression.csv", sep=""),row.names=TRUE)
 
 close(fileConn)
 
 
+}
+
+}
