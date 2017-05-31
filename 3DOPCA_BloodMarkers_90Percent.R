@@ -247,5 +247,33 @@ for (sexLoop in 1:2){
     
     write.csv(regResults, file = paste(savePath,sexType,"_",bMarker,"_kFoldRegression.csv", sep=""),row.names=TRUE)
     close(fileConn)
+    #TODO::::: Performing 90Percent Rule (90% sure they have case/are unhealthy)#####
+    #TODO::::: Performing 90Percent Rule (90% sure they don't have case/are healthy)
+    
+    # Positive predictive value: probability that the disease is present when the test is positive (expressed as a percentage). 
+    # = a / (a+c) = TP / (TP+FP)
+    PPV = pred@tp[[1]]/(pred@tp[[1]]+pred@fp[[1]])
+    PPVMax <- max(na.omit(PPV))
+    
+    #Should be 90% Positive cutoff
+    posCutoff <- pred@cutoffs[[1]][which(PPV == PPVMax)]
+    
+    
+    # Negative predictive value: probability that the disease is not present when the test is negative (expressed as a percentage). 
+    # = d  / (b+d) = TN / (FN+TN)
+    NPV = pred@tn[[1]]/(pred@fn[[1]]+pred@tn[[1]])
+    NPVMax <- max(na.omit(NPV))
+    
+    #Should be 90% negative cutoff
+    negCutoff <- pred@cutoffs[[1]][which(NPV == NPVMax)]
+    
+    nIndNegativeOpportunistic <- ifelse(pred@predictions[[1]] < negCutoff,1,0)
+    nNegOpportunistic <- sum(nIndNegativeOpportunistic)
+    fractNegOpportunistic <- nNegOpportunistic/length(nIndNegativeOpportunistic)
+    
+    nIndPositiveOpportunistic <- ifelse(pred@predictions[[1]] > posCutoff,1,0) #sum(which(pred@predictions<negCutoff))
+    nPosOpportunistic <- sum(nIndPositiveOpportunistic)
+    fractPosOpportunistic <- nPosOpportunistic/length(nIndPositiveOpportunistic)
+    
   }
 }
