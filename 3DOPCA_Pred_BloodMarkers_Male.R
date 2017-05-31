@@ -30,8 +30,8 @@ relData <- allData[keep]
 
 #####
 #Set Save Directory
-setwd("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\")
-savePathBase <- ("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\")
+setwd("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\LinRegression\\")
+savePathBase <- ("X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\LinRegression\\")
 #####
 
 #Perform analysis with Glucose
