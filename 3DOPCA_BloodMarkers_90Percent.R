@@ -9,7 +9,7 @@ require("AUC")
 
 #All relevant variable that need changing are done in this section
 dataDir <- "W:\\3D Optical_Data\\Fit 3D\\Michelle Shape Up Optical Models\\0515 Updated Shape Models\\7k template registration\\"
-saveDir <- "X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\Logistic\\"
+saveDir <- "X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\LogisticOpp\\"
 nFolds <-3 #Number of K Folds cross validations to do
 
 #LOOP for entire analysis#####
@@ -164,7 +164,7 @@ for (sexLoop in 1:2){
         trainSet <- rbind(predData[-testSetIndexes, ])
         
         #Perform the model & stepwise regerssion
-        model <- glm(trainSet[,1]~., family=binomial(logit), data=trainSet[pcsKeep])
+        model <- glm(trainSet[,1]~., family=binomial(), data=trainSet[pcsKeep])
         modelStep <- step(model)
         trainRegSumm <- summary(modelStep)
         out <- capture.output(summary(modelStep)) #Saves to .txt.
@@ -247,26 +247,35 @@ for (sexLoop in 1:2){
     
     write.csv(regResults, file = paste(savePath,sexType,"_",bMarker,"_kFoldRegression.csv", sep=""),row.names=TRUE)
     close(fileConn)
-    #TODO::::: Performing 90Percent Rule (90% sure they have case/are unhealthy)#####
-    #TODO::::: Performing 90Percent Rule (90% sure they don't have case/are healthy)
+    #Performing 80Percent Opportunistic Analysis Rules (80% sure they have case/are unhealthy)#####
     
-    # Positive predictive value: probability that the disease is present when the test is positive (expressed as a percentage). 
-    # = a / (a+c) = TP / (TP+FP)
+    confThresh <- 0.8
+    
+    # Calculate Positive predictive value 
     PPV = pred@tp[[1]]/(pred@tp[[1]]+pred@fp[[1]])
-    PPVMax <- max(na.omit(PPV))
+    PPVMax <- min(PPV[which(PPV > confThresh)])[1]
+    if (is.na(PPVMax)){
+      PPVMax <- max(na.omit(PPV))
+    }
+    if (is.infinite(PPVMax)){
+      PPVMax <- max(na.omit(PPV))
+    }
     
-    #Should be 90% Positive cutoff
-    posCutoff <- pred@cutoffs[[1]][which(PPV == PPVMax)]
-    
-    
-    # Negative predictive value: probability that the disease is not present when the test is negative (expressed as a percentage). 
-    # = d  / (b+d) = TN / (FN+TN)
+    # Calculate Negative predictive value
     NPV = pred@tn[[1]]/(pred@fn[[1]]+pred@tn[[1]])
-    NPVMax <- max(na.omit(NPV))
+    NPVMax <- min(NPV[which(NPV > confThresh)])[1]
+    if (is.na(NPVMax)){
+      NPVMax <- max(na.omit(NPV))
+    }
+    if (is.infinite(NPVMax)){
+      NPVMax <- max(na.omit(NPV))
+    }
     
-    #Should be 90% negative cutoff
-    negCutoff <- pred@cutoffs[[1]][which(NPV == NPVMax)]
+    #Should be 90% Positive and negative cutoff
+    posCutoff <- pred@cutoffs[[1]][which(PPV == PPVMax)][1]
+    negCutoff <- pred@cutoffs[[1]][which(NPV == NPVMax)][1]
     
+    #Find where prediction reaches 90% negative and positive predictive certainty
     nIndNegativeOpportunistic <- ifelse(pred@predictions[[1]] < negCutoff,1,0)
     nNegOpportunistic <- sum(nIndNegativeOpportunistic)
     fractNegOpportunistic <- nNegOpportunistic/length(nIndNegativeOpportunistic)
@@ -275,5 +284,35 @@ for (sexLoop in 1:2){
     nPosOpportunistic <- sum(nIndPositiveOpportunistic)
     fractPosOpportunistic <- nPosOpportunistic/length(nIndPositiveOpportunistic)
     
+    if (PPVMax==1){
+      stop()
+    }
+    if (NPVMax==1){
+      stop()
+    }
+    
+    
+    #Write to .txt file.
+    txtRegFile <-paste(sexType,"_",confThresh*100,"PercentOpportunistic_logisticRegression_",bMarker,".txt", sep="")
+    fileConn<-file(txtRegFile)
+    out <- paste("There were ", nrow(predData), " ", sexType," individuals in this regression prediction", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste(" ", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste("There were ", nNegOpportunistic, " people we were ",NPVMax*100," Percent confident didn't have unhealthy ", bMarker," levels", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste("This was ", fractNegOpportunistic*100, " Percent of the group.", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste(" ", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste("There were ", nPosOpportunistic, " people we were ",PPVMax*100," Percent confident did have unhealthy ", bMarker," levels", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste("This was ", fractPosOpportunistic*100, " Percent of the group.", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste(" ", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    out <- paste("In total there was ", fractPosOpportunistic*100 + fractNegOpportunistic*100, " Percent of the group we opportunistically Classify", sep="") #Saves to .txt.
+    cat(out,file=txtRegFile,sep="\n",append=TRUE)
+    close(fileConn)
   }
 }
