@@ -8,7 +8,7 @@ require("AUC")
 #REQUIRED INPUT FOR EACH MACHINE#####
 
 #All relevant variable that need changing are done in this section
-dataDir <- "W:\\3D Optical_Data\\Fit 3D\\Michelle Shape Up Optical Models\\0515 Updated Shape Models\\7k template registration\\"
+dataDir <- "W:\\3D Optical_Data\\Fit 3D\\Michelle Shape Up Optical Models\\0515 Combined Updated Shape Models\\7k template registration\\"
 saveDir <- "X:\\bhinton\\ShapeUp\\PCA_To_BloodMarkersGender\\Analysis\\Logistic\\"
 nFolds <-3 #Number of K Folds cross validations to do
 
